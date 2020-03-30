@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width" />
+    <style>
+      html,
+      body,
+      #container {
+        height: 100%;
+        padding: 0;
+        margin: 0;
+      }
+    </style>
+    <title>点聚合</title>
+  </head>
+  <body>
+    <div id="container"></div>
+    <script src="https://webapi.amap.com/maps?v=1.4.10&key=c453cc05a143cb2c905212d766126340&plugin=AMap.Driving&plugin=Map3D"></script>
+    <script src="/web/index.js"></script>
+    <script type="text/javascript">
+      //初始化地图对象，加载地图
+      const map = new AMap.Map('container', {
+        viewMode: '3D',
+        resizeEnable: true,
+        zoom: 13,
+        mapStyle: 'amap://styles/dark',
+      });
+
+      const object3Dlayer = new AMap.Object3DLayer({ zIndex: 10 });
+      map.add(object3Dlayer);
+
+      async function fetchData() {
+        const res = await fetch('/outputs/result.json');
+        return res.json();
+      }
+
+      async function drawResult() {
+        const { tree, points, treeMap } = await fetchData();
+        const treeRoots = TreeNode.arrayToTree(tree, points);
+
+        drawGroups(treeRoots, treeMap);
+        drawCutEdges(treeRoots);
+      }
+
+      const COLORS = [
+        '#607d8b',
+        '#e91e63',
+        '#9c27b0',
+        '#673ab7',
+        '#3f51b5',
+        '#2196f3',
+        '#03a9f4',
+        '#00bcd4',
+        '#009688',
+        '#4caf50',
+        '#ff9800',
+        '#795548',
+        '#01579b',
+        '#880e4f',
+        '#ffcdd2',
+        '#880e4f',
+        '#b2dfdb',
+        '#006064',
+        '#ffe0b2',
+        '#e65100',
+        '#bcaaa4',
+        '#b2dfdb',
+        '#0d47a1',
+        '#f8bbd0',
+        '#c5cae9',
+      ];
+
+      let colorIndex = 0;
+      function getRandomColor() {
+        return COLORS[colorIndex++ % COLORS.length];
+      }
+
+      function drawGroups(treeRoots, treeMap) {
+        for (let tree of treeRoots) {
+          const groupColor = getRandomColor();
+          // const line3D = new AMap.Object3D.Line();
+          // line3D.transparent = true;
+          // const geometry = line3D.geometry;
+
+          const polylinePath = [];
+
+          // const points3D = new AMap.Object3D.RoundPoints();
+          // points3D.transparent = true;
+          // const pointsGeometry = points3D.geometry;
+          tree.preOrderTraversal1(node => {
+            const {
+              point: { lng, lat },
+            } = node;
+            // const { x, y } = map.lngLatToGeodeticCoord([lng, lat]);
+            // console.log('drawGroups', node.index, lng, lat);
+
+            // geometry.vertices.push(x, y, 0);
+            // geometry.vertexColors.push(0, 0.4, 1, 0.3);
+            polylinePath.push([lng, lat]);
+
+            // pointsGeometry.vertices.push(x, y, 0);
+            // pointsGeometry.pointSizes.push(12);
+            // pointsGeometry.vertexColors.push(0.029, 0.015, 0.01, 1);
+
+            const circleMarker = new AMap.CircleMarker({
+              center: [lng, lat],
+              radius: 4,
+              fillColor: groupColor,
+              strokeColor: '#888',
+              strokeWeight: 1,
+              zIndex: 10,
+            });
+            map.add(circleMarker);
+
+            // const indexMarker = new AMap.Text({
+            //   position: new AMap.LngLat(lng, lat),
+            //   text: String(node.index),
+            // });
+            // map.add(indexMarker);
+
+            // if (node.parent && !node._isDrawLen) {
+            //   node._isDrawLen = true;
+            //   const centerLng = (node.point.lng + node.parent.point.lng) / 2;
+            //   const centerLat = (node.point.lat + node.parent.point.lat) / 2;
+            //   const len = Math.sqrt((node.point.x - node.parent.point.x) * (node.point.x - node.parent.point.x) + (node.point.y - node.parent.point.y) * (node.point.y - node.parent.point.y));
+            //   const lenMarker = new AMap.Text({
+            //     position: new AMap.LngLat(centerLng, centerLat),
+            //     text: String(len.toFixed(0)),
+            //     style: {
+            //       color: '#aaa'
+            //     }
+            //   });
+            //   map.add(lenMarker);
+
+            //   // const xxxCircleMarker = new AMap.CircleMarker({
+            //   //   center: [node.parent.point.lng, node.parent.point.lat],
+            //   //   radius: 5,
+            //   //   fillColor: 'red',
+            //   //   strokeColor: '#888',
+            //   //   strokeWeight: 1,
+            //   //   zIndex: 10,
+            //   // });
+            //   // map.add(xxxCircleMarker);
+            // }
+          });
+          const polyline = new AMap.Polyline({
+            path: polylinePath,
+            borderWeight: 1,
+            strokeColor: groupColor,
+            lineJoin: 'round',
+            zIndex: 1,
+          });
+          map.add(polyline);
+          // object3Dlayer.add(line3D);
+          // object3Dlayer.add(points3D);
+
+          const treeInfo = treeMap[tree.index];
+          const treeLabelMarker = new AMap.Text({
+            position: new AMap.LngLat(tree.point.lng, tree.point.lat),
+            text: `${tree.nodeCount} ${(treeInfo.edgeWeight / 1000).toFixed(1)} ${(treeInfo.weight).toFixed(1)}`, // i${tree.index}
+            style: {
+              color: groupColor,
+              padding: 0,
+              opacity: 0.7,
+            },
+          });
+          map.add(treeLabelMarker);
+        }
+      }
+
+      function drawCutEdges(roots) {
+        for (let tree of roots) {
+          if (tree.parentPoint) {
+            const path = [
+              [tree.point.lng, tree.point.lat],
+              [tree.parentPoint.lng, tree.parentPoint.lat],
+            ];
+            const polyline = new AMap.Polyline({
+              path,
+              borderWeight: 1,
+              strokeColor: '#aaa',
+              lineJoin: 'round',
+              zIndex: 1,
+            });
+            map.add(polyline);
+          }
+        }
+      }
+
+      drawResult();
+    </script>
+  </body>
+</html>
